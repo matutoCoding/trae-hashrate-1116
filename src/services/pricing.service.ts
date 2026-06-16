@@ -81,7 +81,8 @@ export class PricingService {
       
       if (currentSlot.endTime === '24:00') {
         const nextDay = new Date(currentTime);
-        nextDay.setHours(24, 0, 0, 0);
+        nextDay.setHours(0, 0, 0, 0);
+        nextDay.setDate(nextDay.getDate() + 1);
         segmentEndTime = nextDay;
       } else {
         const slotEndDate = new Date(currentTime);

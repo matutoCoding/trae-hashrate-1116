@@ -62,6 +62,7 @@ export class BillingService {
     let remainingMinutes = bill.totalDurationMinutes;
     let quotaUsed = 0;
     let timeCardUsed: BillingResult['timeCardUsed'] | undefined;
+    let timeCardDeductedAmount = 0;
 
     if (options.preferQuotaFirst !== false) {
       const quotaResult = this.applyQuotaDeduction(bill, member, remainingMinutes);
@@ -81,29 +82,19 @@ export class BillingService {
           cardId: options.useTimeCardId,
           minutesUsed: timeCardResult.minutesDeducted
         };
+        timeCardDeductedAmount = timeCardResult.amountDeducted;
         remainingMinutes -= timeCardResult.minutesDeducted;
       }
     }
 
-    bill.selfPaidAmount = this.calculateAmountFromMinutes(
+    const selfPayAmount = this.calculateAmountFromMinutes(
       bill.segments,
-      bill.totalDurationMinutes - remainingMinutes,
+      remainingMinutes,
       bill.totalDurationMinutes
     );
-    bill.selfPaidAmount = Math.round((bill.totalAmount - bill.quotaDeductedAmount) * 100) / 100;
+    bill.selfPaidAmount = Math.max(0, Math.round(selfPayAmount * 100) / 100);
 
-    if (timeCardUsed && bill.timeCardUsed) {
-      const timeCardMin = Math.min(
-        timeCardUsed.minutesUsed,
-        bill.totalDurationMinutes - bill.quotaDeductedMinutes
-      );
-      const timeCardAmount = this.calculateAmountFromMinutes(
-        bill.segments,
-        timeCardMin,
-        bill.totalDurationMinutes
-      );
-      bill.selfPaidAmount = Math.round((bill.selfPaidAmount - timeCardAmount) * 100) / 100;
-      bill.selfPaidAmount = Math.max(0, bill.selfPaidAmount);
+    if (timeCardUsed) {
       bill.timeCardUsed = timeCardUsed;
     }
 

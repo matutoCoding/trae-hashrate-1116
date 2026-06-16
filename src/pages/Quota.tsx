@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { Wallet, Gift, Calendar, RefreshCw, Clock, ChevronRight, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
@@ -170,30 +170,53 @@ export default function Quota() {
                   <h3 className="font-medium text-gray-800">近7天消费趋势</h3>
                 </div>
               </div>
-              <div className="h-48">
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={trendData.filter(d => d.duration > 0)}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={60}
-                      dataKey="duration"
-                      label={({ date, duration }) => `${date}: ${duration}分钟`}
-                      labelLine={false}
-                    >
-                      {trendData.map((_, index) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={['#0EA5E9', '#34D399', '#F97316', '#A78BFA', '#FBBF24', '#F43F5E', '#60A5FA'][index % 7]} 
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) => [`${value}分钟`, '时长']}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  <BarChart data={trendData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12, fill: '#9CA3AF' }}
+                      axisLine={{ stroke: '#E5E7EB' }}
+                      tickLine={false}
                     />
-                  </PieChart>
+                    <YAxis 
+                      tick={{ fontSize: 12, fill: '#9CA3AF' }}
+                      axisLine={false}
+                      tickLine={false}
+                      label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#9CA3AF' } }}
+                    />
+                    <Tooltip
+                      formatter={(value: number, name: string) => {
+                        if (name === 'duration') return [`${value} 分钟`, '洗车时长'];
+                        if (name === 'amount') return [`¥${value.toFixed(2)}`, '消费金额'];
+                        return [value, name];
+                      }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }}
+                    />
+                    <Legend 
+                      wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
+                      formatter={(value) => {
+                        if (value === 'duration') return '洗车时长(分钟)';
+                        if (value === 'amount') return '消费金额(元)';
+                        return value;
+                      }}
+                    />
+                    <Bar 
+                      dataKey="duration" 
+                      fill="#0EA5E9" 
+                      radius={[4, 4, 0, 0]} 
+                      name="duration"
+                      barSize={20}
+                    />
+                    <Bar 
+                      dataKey="amount" 
+                      fill="#34D399" 
+                      radius={[4, 4, 0, 0]} 
+                      name="amount"
+                      barSize={20}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>

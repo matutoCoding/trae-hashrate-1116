@@ -3,6 +3,7 @@ import type { Member, BillingRecord, TimeSlot, BillingCalculationResult } from '
 import { mockMember, mockBillingRecords, defaultTimeSlots } from '../data/mockData';
 import { transactionService } from '../services/transaction.service';
 import { quotaService } from '../services/quota.service';
+import { pricingService } from '../services/pricing.service';
 
 interface AppState {
   member: Member;
@@ -71,7 +72,6 @@ export const useStore = create<AppState>((set, get) => ({
       const { currentWash } = get();
       if (!currentWash.isWashing || !currentWash.startTime) return;
       
-      const { pricingService } = require('../services/pricing.service');
       const result = pricingService.calculateRealTimeCost(
         currentWash.startTime,
         new Date()

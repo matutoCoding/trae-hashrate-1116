@@ -84,9 +84,10 @@ export class QuotaService {
   getQuotaUsagePercentage(member: Member): number {
     this.checkAndResetQuota(member);
     if (member.quota.monthlyFreeMinutes === 0) return 100;
-    return Math.round(
+    const percentage = Math.round(
       (member.quota.usedMinutes / member.quota.monthlyFreeMinutes) * 100
     );
+    return Math.min(100, percentage);
   }
 
   getDaysUntilReset(member: Member): number {
