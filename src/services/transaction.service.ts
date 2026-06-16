@@ -22,7 +22,7 @@ export class TransactionService {
 
     if (filter.startDate && filter.endDate) {
       filtered = filtered.filter(bill =>
-        isWithinInterval(new Date(bill.createdAt), {
+        isWithinInterval(new Date(bill.endTime), {
           start: filter.startDate!,
           end: filter.endDate!
         })
@@ -34,7 +34,7 @@ export class TransactionService {
     }
 
     return filtered.sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
     );
   }
 
@@ -83,7 +83,7 @@ export class TransactionService {
     this.bills
       .filter(bill => bill.memberId === memberId)
       .forEach(bill => {
-        const date = new Date(bill.createdAt);
+        const date = new Date(bill.endTime);
         const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
         months.add(key);
       });

@@ -2,6 +2,7 @@ import { X, Download, Calendar, Clock, Wallet, CreditCard, Tag } from 'lucide-re
 import { format } from 'date-fns';
 import type { BillingRecord } from '../types';
 import BillingSegments from './BillingSegments';
+import { transactionService } from '../services/transaction.service';
 import { cn } from '@/lib/utils';
 
 interface BillDetailModalProps {
@@ -28,7 +29,6 @@ export default function BillDetailModal({ bill, onClose }: BillDetailModalProps)
   const PaymentIcon = paymentMethod.icon;
 
   const handleExport = () => {
-    const { transactionService } = require('../services/transaction.service');
     const content = transactionService.exportBill(bill.id);
     if (content) {
       const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -140,7 +140,7 @@ export default function BillDetailModal({ bill, onClose }: BillDetailModalProps)
                     <CreditCard size={16} />
                     次卡抵扣 ({bill.timeCardUsed.minutesUsed}分钟)
                   </span>
-                  <span className="font-mono">-¥{(bill.totalAmount - bill.quotaDeductedAmount - bill.selfPaidAmount).toFixed(2)}</span>
+                  <span className="font-mono">-¥{bill.timeCardUsed.amountDeducted.toFixed(2)}</span>
                 </div>
               )}
               

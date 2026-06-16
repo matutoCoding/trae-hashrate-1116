@@ -47,6 +47,7 @@ export interface BillingRecord {
   timeCardUsed?: {
     cardId: string;
     minutesUsed: number;
+    amountDeducted: number;
   };
   paymentMethod: string;
   status: 'pending' | 'paid' | 'cancelled';

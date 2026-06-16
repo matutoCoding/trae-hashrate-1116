@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Square, Clock, Zap, Tag, CheckCircle, AlertCircle } from 'lucide-react';
+import { Play, Square, Clock, Zap, Tag, CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
 import { format, differenceInSeconds } from 'date-fns';
 import { useStore } from '../store/useStore';
 import { pricingService } from '../services/pricing.service';
@@ -16,6 +16,7 @@ export default function Wash() {
   
   const [isWashing, setIsWashing] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentCost, setCurrentCost] = useState<{
     segments: any[];
@@ -64,6 +65,17 @@ export default function Wash() {
     }
   }, [isWashing, startTime]);
 
+  useEffect(() => {
+    if (showPayment && startTime && endTime) {
+      const options = {
+        useTimeCardId: selectedTimeCard || undefined,
+        preferQuotaFirst: useQuota
+      };
+      const result = billingService.createBill(startTime, endTime, member, options);
+      setPendingBill(result.bill);
+    }
+  }, [selectedTimeCard, useQuota, showPayment, startTime, endTime, member]);
+
   const startWash = () => {
     const now = new Date();
     setStartTime(now);
@@ -84,8 +96,9 @@ export default function Wash() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (costUpdateRef.current) clearInterval(costUpdateRef.current);
     
-    const endTime = new Date();
-    const finalResult = pricingService.calculateSegments(startTime, endTime);
+    const end = new Date();
+    setEndTime(end);
+    const finalResult = pricingService.calculateSegments(startTime, end);
     setCurrentCost(finalResult);
     
     const options = {
@@ -93,7 +106,7 @@ export default function Wash() {
       preferQuotaFirst: useQuota
     };
     
-    const result = billingService.createBill(startTime, endTime, member, options);
+    const result = billingService.createBill(startTime, end, member, options);
     setPendingBill(result.bill);
     setIsWashing(false);
     setShowPayment(true);
@@ -102,6 +115,7 @@ export default function Wash() {
   const confirmPayment = () => {
     if (!pendingBill) return;
     
+    billingService.confirmBillDeductions(pendingBill, member);
     const finalBill = billingService.confirmPayment(pendingBill, pendingBill.paymentMethod);
     actions.addBillingRecord(finalBill);
     setPaymentSuccess(true);
@@ -391,11 +405,82 @@ export default function Wash() {
                       <div className="flex items-center justify-between text-sm text-purple-600">
                         <span>次卡抵扣 ({pendingBill.timeCardUsed.minutesUsed}分钟)</span>
                         <span className="font-mono">
-                          -¥{(pendingBill.totalAmount - pendingBill.quotaDeductedAmount - pendingBill.selfPaidAmount).toFixed(2)}
+                          -¥{pendingBill.timeCardUsed.amountDeducted.toFixed(2)}
                         </span>
                       </div>
                     )}
                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-medium text-gray-800">支付方式</h3>
+                  
+                  {member.quota.remainingMinutes > 0 && (
+                    <div className="card p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-success-100 flex items-center justify-center">
+                            <Tag size={20} className="text-success-500" />
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-800">使用月度免费额度</div>
+                            <div className="text-sm text-gray-500">
+                              剩余 {member.quota.remainingMinutes} 分钟
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setUseQuota(!useQuota)}
+                          className={cn(
+                            'w-12 h-7 rounded-full transition-colors duration-300',
+                            useQuota ? 'bg-success-500' : 'bg-gray-200'
+                          )}
+                        >
+                          <div 
+                            className={cn(
+                              'w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300',
+                              useQuota ? 'translate-x-6' : 'translate-x-1'
+                            )}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTimeCards.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-gray-500">选择次卡抵扣（可选）</p>
+                      {activeTimeCards.map((card: TimeCard) => (
+                        <div
+                          key={card.id}
+                          onClick={() => setSelectedTimeCard(selectedTimeCard === card.id ? null : card.id)}
+                          className={cn(
+                            'card p-3 cursor-pointer transition-all duration-200',
+                            selectedTimeCard === card.id
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-gray-100 hover:border-gray-200'
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                                <CreditCard size={16} className="text-purple-500" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-800 text-sm">{card.name}</div>
+                                <div className="text-xs text-gray-500">
+                                  剩余 {card.remainingMinutes}/{card.totalMinutes} 分钟
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              有效期至 {format(new Date(card.expireDate), 'MM-dd')}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>

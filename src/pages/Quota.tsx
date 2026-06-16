@@ -187,12 +187,15 @@ export default function Quota() {
                       label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#9CA3AF' } }}
                     />
                     <Tooltip
+                      cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }}
+                      labelFormatter={(label: string) => `${label}日消费情况`}
                       formatter={(value: number, name: string) => {
                         if (name === 'duration') return [`${value} 分钟`, '洗车时长'];
                         if (name === 'amount') return [`¥${value.toFixed(2)}`, '消费金额'];
                         return [value, name];
                       }}
                       contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }}
+                      labelStyle={{ fontWeight: 600, marginBottom: 4, color: '#374151' }}
                     />
                     <Legend 
                       wrapperStyle={{ fontSize: 12, paddingTop: 10 }}

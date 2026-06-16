@@ -15,6 +15,7 @@ export interface BillingResult {
   timeCardUsed?: {
     cardId: string;
     minutesUsed: number;
+    amountDeducted: number;
   };
   selfPaidAmount: number;
 }
@@ -80,7 +81,8 @@ export class BillingService {
       if (timeCardResult.success) {
         timeCardUsed = {
           cardId: options.useTimeCardId,
-          minutesUsed: timeCardResult.minutesDeducted
+          minutesUsed: timeCardResult.minutesDeducted,
+          amountDeducted: timeCardResult.amountDeducted
         };
         timeCardDeductedAmount = timeCardResult.amountDeducted;
         remainingMinutes -= timeCardResult.minutesDeducted;
@@ -123,23 +125,24 @@ export class BillingService {
       return { quotaDeducted: 0, amountDeducted: 0 };
     }
 
-    const result = quotaService.deductQuota(member, minutesToDeduct);
+    const availableMinutes = member.quota.remainingMinutes;
+    const actualDeduction = Math.min(minutesToDeduct, availableMinutes);
     
-    if (!result.success) {
+    if (actualDeduction <= 0) {
       return { quotaDeducted: 0, amountDeducted: 0 };
     }
 
     const deductedAmount = this.calculateAmountFromMinutes(
       bill.segments,
-      result.deductedMinutes,
+      actualDeduction,
       bill.totalDurationMinutes
     );
 
-    bill.quotaDeductedMinutes = result.deductedMinutes;
+    bill.quotaDeductedMinutes = actualDeduction;
     bill.quotaDeductedAmount = deductedAmount;
 
     return {
-      quotaDeducted: result.deductedMinutes,
+      quotaDeducted: actualDeduction,
       amountDeducted: deductedAmount
     };
   }
@@ -156,26 +159,37 @@ export class BillingService {
       return { success: false, minutesDeducted: 0, amountDeducted: 0 };
     }
 
-    const result = quotaService.deductTimeCard(member, cardId, minutesToDeduct);
+    const card = member.timeCards.find(c => c.id === cardId);
     
-    if (!result.success) {
+    if (!card || !card.isActive) {
+      return { success: false, minutesDeducted: 0, amountDeducted: 0 };
+    }
+
+    if (new Date(card.expireDate) <= new Date()) {
+      return { success: false, minutesDeducted: 0, amountDeducted: 0 };
+    }
+
+    const actualDeduction = Math.min(minutesToDeduct, card.remainingMinutes);
+    
+    if (actualDeduction <= 0) {
       return { success: false, minutesDeducted: 0, amountDeducted: 0 };
     }
 
     const deductedAmount = this.calculateAmountFromMinutes(
       bill.segments,
-      result.deductedMinutes,
+      actualDeduction,
       bill.totalDurationMinutes
     );
 
     bill.timeCardUsed = {
       cardId,
-      minutesUsed: result.deductedMinutes
+      minutesUsed: actualDeduction,
+      amountDeducted: deductedAmount
     };
 
     return {
       success: true,
-      minutesDeducted: result.deductedMinutes,
+      minutesDeducted: actualDeduction,
       amountDeducted: deductedAmount
     };
   }
@@ -218,6 +232,15 @@ export class BillingService {
     bill.status = 'paid';
     bill.paymentMethod = paymentMethod;
     return bill;
+  }
+
+  confirmBillDeductions(bill: BillingRecord, member: Member): void {
+    if (bill.quotaDeductedMinutes > 0) {
+      quotaService.deductQuota(member, bill.quotaDeductedMinutes);
+    }
+    if (bill.timeCardUsed && bill.timeCardUsed.minutesUsed > 0) {
+      quotaService.deductTimeCard(member, bill.timeCardUsed.cardId, bill.timeCardUsed.minutesUsed);
+    }
   }
 
   cancelBill(bill: BillingRecord): BillingRecord {
