@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-800 min-h-screen;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-primary-500 text-white font-medium rounded-lg
+           hover:bg-primary-600 active:scale-[0.96] transition-all duration-200
+           shadow-md hover:shadow-lg;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-primary-600 font-medium rounded-lg border-2 border-primary-500
+           hover:bg-primary-50 active:scale-[0.96] transition-all duration-200;
+  }
+  
+  .btn-accent {
+    @apply px-6 py-3 bg-accent-500 text-white font-medium rounded-lg
+           hover:bg-accent-600 active:scale-[0.96] transition-all duration-200
+           shadow-md hover:shadow-lg;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6
+           hover:shadow-md hover:-translate-y-0.5 transition-all duration-300;
+  }
+  
+  .card-gradient {
+    @apply bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700
+           rounded-2xl shadow-lg text-white p-6;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-2.5 border border-gray-200 rounded-lg
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-all duration-200;
+  }
+  
+  .nav-link {
+    @apply flex flex-col items-center justify-center gap-1 py-2 px-4
+           text-gray-500 hover:text-primary-500 transition-colors duration-200;
+  }
+  
+  .nav-link.active {
+    @apply text-primary-500;
+  }
+  
+  .progress-bar {
+    @apply h-2 bg-gray-100 rounded-full overflow-hidden;
+  }
+  
+  .progress-fill {
+    @apply h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full
+           transition-all duration-500 ease-out;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-600 to-accent-500 bg-clip-text text-transparent;
+  }
+  
+  .animate-stagger-1 { animation-delay: 100ms; }
+  .animate-stagger-2 { animation-delay: 200ms; }
+  .animate-stagger-3 { animation-delay: 300ms; }
+  .animate-stagger-4 { animation-delay: 400ms; }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
