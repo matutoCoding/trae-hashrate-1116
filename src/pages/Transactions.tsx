@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Car, Filter, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Car, Filter, Calendar, Download, X, Tag, CreditCard, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { useStore } from '../store/useStore';
 import { transactionService } from '../services/transaction.service';
 import BillDetailModal from '../components/BillDetailModal';
-import type { BillingRecord } from '../types';
+import type { BillingRecord, TransactionFilter } from '../types';
 import { cn } from '@/lib/utils';
 
 const statusConfig = {
@@ -13,6 +13,14 @@ const statusConfig = {
   pending: { label: '待支付', color: 'bg-warning-100 text-warning-700' },
   cancelled: { label: '已取消', color: 'bg-gray-100 text-gray-500' },
 };
+
+const paymentMethodOptions = [
+  { value: '', label: '全部方式', icon: Wallet },
+  { value: 'quota', label: '额度支付', icon: Tag },
+  { value: 'timecard', label: '次卡支付', icon: CreditCard },
+  { value: 'balance', label: '余额支付', icon: Wallet },
+  { value: 'mixed', label: '组合支付', icon: Wallet },
+];
 
 export default function Transactions() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,17 +32,33 @@ export default function Transactions() {
     totalDuration: number;
     totalAmount: number;
     totalSelfPaid: number;
+    totalQuotaDeducted: number;
   } | null>(null);
   const [selectedBill, setSelectedBill] = useState<BillingRecord | null>(null);
   const [showFilter, setShowFilter] = useState(false);
+
   const [statusFilter, setStatusFilter] = useState<BillingRecord['status'] | 'all'>('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
+  const [usedQuotaFilter, setUsedQuotaFilter] = useState(false);
+  const [usedTimeCardFilter, setUsedTimeCardFilter] = useState(false);
 
   const billIdParam = searchParams.get('id');
+
+  const buildFilter = (): TransactionFilter => {
+    const filter: TransactionFilter = {};
+    if (statusFilter !== 'all') filter.status = statusFilter;
+    if (paymentMethodFilter) filter.paymentMethod = paymentMethodFilter;
+    if (usedQuotaFilter) filter.usedQuota = true;
+    if (usedTimeCardFilter) filter.usedTimeCard = true;
+    return filter;
+  };
+
+  const hasActiveFilters = statusFilter !== 'all' || paymentMethodFilter !== '' || usedQuotaFilter || usedTimeCardFilter;
 
   useEffect(() => {
     transactionService.setBills(billingRecords);
     refreshData();
-  }, [billingRecords, selectedMonth, statusFilter]);
+  }, [billingRecords, selectedMonth, statusFilter, paymentMethodFilter, usedQuotaFilter, usedTimeCardFilter]);
 
   useEffect(() => {
     if (billIdParam) {
@@ -47,20 +71,27 @@ export default function Transactions() {
   }, [billIdParam, billingRecords]);
 
   const refreshData = () => {
-    const filter = statusFilter !== 'all' ? { status: statusFilter } : {};
-    const data = transactionService.getBillList(member.id, filter);
-    setBills(data);
-
-    const monthlyStats = transactionService.getMonthlyStatistics(
+    const filter = buildFilter();
+    const data = transactionService.getBillsByMonthWithFilter(
       member.id,
       selectedMonth.year,
-      selectedMonth.month
+      selectedMonth.month,
+      filter
+    );
+    setBills(data);
+
+    const monthlyStats = transactionService.getMonthlyStatisticsWithFilter(
+      member.id,
+      selectedMonth.year,
+      selectedMonth.month,
+      filter
     );
     setStats({
       totalCount: monthlyStats.totalCount,
       totalDuration: monthlyStats.totalDuration,
       totalAmount: monthlyStats.totalAmount,
-      totalSelfPaid: monthlyStats.totalSelfPaid
+      totalSelfPaid: monthlyStats.totalSelfPaid,
+      totalQuotaDeducted: monthlyStats.totalQuotaDeducted
     });
   };
 
@@ -75,6 +106,26 @@ export default function Transactions() {
       year += 1;
     }
     actions.setSelectedMonth(year, month);
+  };
+
+  const handleExportMonth = () => {
+    const content = transactionService.exportMonth(member.id, selectedMonth.year, selectedMonth.month);
+    if (content) {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `消费明细_${selectedMonth.year}年${selectedMonth.month}月.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPaymentMethodFilter('');
+    setUsedQuotaFilter(false);
+    setUsedTimeCardFilter(false);
   };
 
   const availableMonths = transactionService.getAvailableMonths(member.id);
@@ -108,33 +159,108 @@ export default function Transactions() {
                 <ChevronRight size={20} className="text-gray-600" />
               </button>
             </div>
-            <button
-              onClick={() => setShowFilter(!showFilter)}
-              className={cn(
-                'p-2 rounded-lg transition-colors',
-                statusFilter !== 'all' ? 'bg-primary-100 text-primary-600' : 'hover:bg-gray-100 text-gray-600'
-              )}
-            >
-              <Filter size={20} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handleExportMonth}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="导出本月报表"
+              >
+                <Download size={18} className="text-gray-600" />
+              </button>
+              <button
+                onClick={() => setShowFilter(!showFilter)}
+                className={cn(
+                  'p-2 rounded-lg transition-colors',
+                  hasActiveFilters ? 'bg-primary-100 text-primary-600' : 'hover:bg-gray-100 text-gray-600'
+                )}
+              >
+                <Filter size={20} />
+              </button>
+            </div>
           </div>
 
           {showFilter && (
-            <div className="flex gap-2 mb-4 animate-fade-in-up opacity-0">
-              {(['all', 'paid', 'pending', 'cancelled'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={cn(
-                    'px-4 py-2 rounded-lg text-sm font-medium transition-all',
-                    statusFilter === s
-                      ? 'bg-primary-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            <div className="space-y-4 mb-4 animate-fade-in-up opacity-0">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium text-gray-700">账单状态</div>
+                  {hasActiveFilters && (
+                    <button
+                      onClick={clearFilters}
+                      className="text-xs text-primary-500 hover:text-primary-600 flex items-center gap-1"
+                    >
+                      <X size={12} /> 清除筛选
+                    </button>
                   )}
-                >
-                  {s === 'all' ? '全部' : statusConfig[s].label}
-                </button>
-              ))}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {(['all', 'paid', 'pending', 'cancelled'] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStatusFilter(s)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                        statusFilter === s
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      {s === 'all' ? '全部' : statusConfig[s].label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-2">支付方式</div>
+                <div className="flex gap-2 flex-wrap">
+                  {paymentMethodOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setPaymentMethodFilter(opt.value)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
+                        paymentMethodFilter === opt.value
+                          ? 'bg-primary-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      )}
+                    >
+                      <opt.icon size={14} />
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-2">更多条件</div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setUsedQuotaFilter(!usedQuotaFilter)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
+                      usedQuotaFilter
+                        ? 'bg-success-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <Tag size={14} />
+                    使用了月度额度
+                  </button>
+                  <button
+                    onClick={() => setUsedTimeCardFilter(!usedTimeCardFilter)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
+                      usedTimeCardFilter
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                  >
+                    <CreditCard size={14} />
+                    使用了次卡
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -182,7 +308,17 @@ export default function Transactions() {
         {bills.length === 0 ? (
           <div className="card text-center py-12 animate-fade-in-up opacity-0 animate-stagger-1">
             <Car size={48} className="mx-auto text-gray-300 mb-3" />
-            <p className="text-gray-500">本月暂无消费记录</p>
+            <p className="text-gray-500">
+              {hasActiveFilters ? '没有符合筛选条件的记录' : '本月暂无消费记录'}
+            </p>
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="mt-3 text-sm text-primary-500 hover:text-primary-600"
+              >
+                清除筛选条件
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -223,6 +359,11 @@ export default function Transactions() {
                           {bill.quotaDeductedMinutes > 0 && (
                             <span className="text-success-600">
                               · 额度抵扣{bill.quotaDeductedMinutes}分钟
+                            </span>
+                          )}
+                          {bill.timeCardUsed && bill.timeCardUsed.minutesUsed > 0 && (
+                            <span className="text-purple-600">
+                              · 次卡抵扣{bill.timeCardUsed.minutesUsed}分钟
                             </span>
                           )}
                         </div>

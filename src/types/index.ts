@@ -83,4 +83,7 @@ export interface TransactionFilter {
   startDate?: Date;
   endDate?: Date;
   status?: BillingRecord['status'];
+  paymentMethod?: string;
+  usedQuota?: boolean;
+  usedTimeCard?: boolean;
 }

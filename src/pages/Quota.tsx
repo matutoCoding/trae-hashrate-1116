@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { Wallet, Gift, Calendar, RefreshCw, Clock, ChevronRight, TrendingUp } from 'lucide-react';
+import { Wallet, Gift, Calendar, RefreshCw, Clock, ChevronRight, TrendingUp, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { quotaService } from '../services/quota.service';
 import { transactionService } from '../services/transaction.service';
-import type { TimeCard, QuotaResetLog } from '../types';
+import type { TimeCard, QuotaResetLog, BillingRecord } from '../types';
 import { cn } from '@/lib/utils';
 
 const levelConfig = {
@@ -15,18 +16,63 @@ const levelConfig = {
   platinum: { label: '铂金会员', monthlyQuota: 180, color: '#8B5CF6' },
 };
 
+interface TrendDay {
+  date: string;
+  fullDate: string;
+  amount: number;
+  duration: number;
+  billIds: string[];
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string; dataKey: string }>;
+  label?: string;
+}
+
+function TrendTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (!active || !label) return null;
+  const duration = payload?.find(p => p.dataKey === 'duration')?.value ?? 0;
+  const amount = payload?.find(p => p.dataKey === 'amount')?.value ?? 0;
+
+  return (
+    <div style={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12, background: '#fff', padding: '10px 14px' }}>
+      <div style={{ fontWeight: 600, marginBottom: 6, color: '#374151' }}>{label}日消费情况</div>
+      <div style={{ color: '#0EA5E9', marginBottom: 2 }}>洗车时长: {duration} 分钟</div>
+      <div style={{ color: '#34D399' }}>消费金额: ¥{typeof amount === 'number' ? amount.toFixed(2) : '0.00'}</div>
+      {duration === 0 && amount === 0 && (
+        <div style={{ color: '#9CA3AF', marginTop: 4, fontSize: 11 }}>当日无消费记录</div>
+      )}
+    </div>
+  );
+}
+
 export default function Quota() {
   const { member, billingRecords } = useStore();
+  const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState<'quota' | 'cards' | 'history'>('quota');
   const [resetLogs, setResetLogs] = useState<QuotaResetLog[]>([]);
-  const [trendData, setTrendData] = useState<{ date: string; duration: number }[]>([]);
+  const [trendData, setTrendData] = useState<TrendDay[]>([]);
+  const [selectedDay, setSelectedDay] = useState<TrendDay | null>(null);
+  const [dayBills, setDayBills] = useState<BillingRecord[]>([]);
 
   useEffect(() => {
     transactionService.setBills(billingRecords);
     setResetLogs(quotaService.getResetLogs(member.id));
     setTrendData(transactionService.getDailyConsumptionTrend(member.id, 7));
   }, [billingRecords, member.id]);
+
+  useEffect(() => {
+    if (selectedDay && selectedDay.billIds.length > 0) {
+      const bills = selectedDay.billIds
+        .map(id => billingRecords.find(b => b.id === id))
+        .filter((b): b is BillingRecord => !!b);
+      setDayBills(bills);
+    } else {
+      setDayBills([]);
+    }
+  }, [selectedDay, billingRecords]);
 
   const quota = quotaService.getCurrentQuota(member);
   const usagePercent = quotaService.getQuotaUsagePercentage(member);
@@ -52,6 +98,10 @@ export default function Quota() {
       quotaService.resetMonthlyQuota(member);
       setResetLogs(quotaService.getResetLogs(member.id));
     }
+  };
+
+  const handleBarClick = (data: TrendDay) => {
+    setSelectedDay(data);
   };
 
   return (
@@ -169,6 +219,7 @@ export default function Quota() {
                   <TrendingUp size={20} className="text-primary-500" />
                   <h3 className="font-medium text-gray-800">近7天消费趋势</h3>
                 </div>
+                <span className="text-xs text-gray-400">点击柱子查看详情</span>
               </div>
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -186,17 +237,7 @@ export default function Quota() {
                       tickLine={false}
                       label={{ value: '分钟', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#9CA3AF' } }}
                     />
-                    <Tooltip
-                      cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }}
-                      labelFormatter={(label: string) => `${label}日消费情况`}
-                      formatter={(value: number, name: string) => {
-                        if (name === 'duration') return [`${value} 分钟`, '洗车时长'];
-                        if (name === 'amount') return [`¥${value.toFixed(2)}`, '消费金额'];
-                        return [value, name];
-                      }}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }}
-                      labelStyle={{ fontWeight: 600, marginBottom: 4, color: '#374151' }}
-                    />
+                    <Tooltip content={<TrendTooltip />} cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }} />
                     <Legend 
                       wrapperStyle={{ fontSize: 12, paddingTop: 10 }}
                       formatter={(value) => {
@@ -211,6 +252,8 @@ export default function Quota() {
                       radius={[4, 4, 0, 0]} 
                       name="duration"
                       barSize={20}
+                      onClick={(data: TrendDay) => handleBarClick(data)}
+                      style={{ cursor: 'pointer' }}
                     />
                     <Bar 
                       dataKey="amount" 
@@ -218,10 +261,71 @@ export default function Quota() {
                       radius={[4, 4, 0, 0]} 
                       name="amount"
                       barSize={20}
+                      onClick={(data: TrendDay) => handleBarClick(data)}
+                      style={{ cursor: 'pointer' }}
                     />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+
+              {selectedDay && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-xl animate-fade-in-up opacity-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-medium text-gray-800">{selectedDay.fullDate} 消费详情</div>
+                    <button
+                      onClick={() => setSelectedDay(null)}
+                      className="text-gray-400 hover:text-gray-600 text-sm"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-primary-600">{selectedDay.duration}</div>
+                      <div className="text-xs text-gray-500">消费时长(分钟)</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-success-600">¥{selectedDay.amount.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">消费金额</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-accent-600">{quota.remainingMinutes}</div>
+                      <div className="text-xs text-gray-500">剩余额度(分钟)</div>
+                    </div>
+                  </div>
+
+                  {selectedDay.duration === 0 && selectedDay.amount === 0 && (
+                    <div className="text-center py-3 text-gray-400 text-sm">
+                      当日无消费记录，休息日也要保持爱车整洁哦 🚗
+                    </div>
+                  )}
+
+                  {dayBills.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs text-gray-500 font-medium">相关账单</div>
+                      {dayBills.map(bill => (
+                        <div
+                          key={bill.id}
+                          className="flex items-center justify-between bg-white rounded-lg p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                          onClick={() => navigate(`/transactions?id=${bill.id}`)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <FileText size={14} className="text-primary-400" />
+                            <span className="text-sm text-gray-700">
+                              {format(new Date(bill.startTime), 'HH:mm')} - {format(new Date(bill.endTime), 'HH:mm')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono text-gray-800">¥{bill.selfPaidAmount.toFixed(2)}</span>
+                            <ChevronRight size={14} className="text-gray-400" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -229,7 +333,7 @@ export default function Quota() {
                 <div className="text-sm text-gray-500 mb-2">本月已节省</div>
                 <div className="font-mono text-2xl font-bold text-success-600">
                   ¥{billingRecords
-                    .filter(b => new Date(b.createdAt).getMonth() === new Date().getMonth())
+                    .filter(b => new Date(b.endTime).getMonth() === new Date().getMonth() && new Date(b.endTime).getFullYear() === new Date().getFullYear())
                     .reduce((sum, b) => sum + b.quotaDeductedAmount, 0)
                     .toFixed(2)}
                 </div>

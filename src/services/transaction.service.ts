@@ -33,6 +33,18 @@ export class TransactionService {
       filtered = filtered.filter(bill => bill.status === filter.status);
     }
 
+    if (filter.paymentMethod) {
+      filtered = filtered.filter(bill => bill.paymentMethod === filter.paymentMethod);
+    }
+
+    if (filter.usedQuota === true) {
+      filtered = filtered.filter(bill => bill.quotaDeductedMinutes > 0);
+    }
+
+    if (filter.usedTimeCard === true) {
+      filtered = filtered.filter(bill => !!bill.timeCardUsed && bill.timeCardUsed.minutesUsed > 0);
+    }
+
     return filtered.sort((a, b) => 
       new Date(b.endTime).getTime() - new Date(a.endTime).getTime()
     );
@@ -47,6 +59,32 @@ export class TransactionService {
     const end = endOfMonth(new Date(year, month - 1));
     
     return this.getBillList(memberId, { startDate: start, endDate: end });
+  }
+
+  getBillsByMonthWithFilter(memberId: string, year: number, month: number, filter: TransactionFilter = {}): BillingRecord[] {
+    const start = startOfMonth(new Date(year, month - 1));
+    const end = endOfMonth(new Date(year, month - 1));
+    
+    return this.getBillList(memberId, { ...filter, startDate: start, endDate: end });
+  }
+
+  getMonthlyStatisticsWithFilter(memberId: string, year: number, month: number, filter: TransactionFilter = {}) {
+    const bills = this.getBillsByMonthWithFilter(memberId, year, month, filter);
+    
+    const totalCount = bills.length;
+    const totalDuration = bills.reduce((sum, bill) => sum + bill.totalDurationMinutes, 0);
+    const totalAmount = bills.reduce((sum, bill) => sum + bill.totalAmount, 0);
+    const totalQuotaDeducted = bills.reduce((sum, bill) => sum + bill.quotaDeductedAmount, 0);
+    const totalSelfPaid = bills.reduce((sum, bill) => sum + bill.selfPaidAmount, 0);
+
+    return {
+      totalCount,
+      totalDuration,
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      totalQuotaDeducted: Math.round(totalQuotaDeducted * 100) / 100,
+      totalSelfPaid: Math.round(totalSelfPaid * 100) / 100,
+      averageDuration: totalCount > 0 ? Math.round(totalDuration / totalCount) : 0
+    };
   }
 
   getMonthlyStatistics(memberId: string, year: number, month: number) {
@@ -161,6 +199,49 @@ export class TransactionService {
     return lines.join('\n');
   }
 
+  exportMonth(memberId: string, year: number, month: number): string | null {
+    const bills = this.getBillsByMonth(memberId, year, month);
+    if (bills.length === 0) return null;
+
+    const stats = this.getMonthlyStatistics(memberId, year, month);
+
+    const lines: string[] = [];
+    lines.push('====================================');
+    lines.push(`  ${year}年${month}月 消费明细报表`);
+    lines.push('====================================');
+    lines.push('');
+    lines.push('--- 月度汇总 ---');
+    lines.push(`消费次数: ${stats.totalCount} 次`);
+    lines.push(`总时长: ${stats.totalDuration} 分钟`);
+    lines.push(`消费总额: ¥${stats.totalAmount.toFixed(2)}`);
+    lines.push(`额度抵扣: ¥${stats.totalQuotaDeducted.toFixed(2)}`);
+    lines.push(`实付金额: ¥${stats.totalSelfPaid.toFixed(2)}`);
+    lines.push(`平均时长: ${stats.averageDuration} 分钟/次`);
+    lines.push('');
+    lines.push('--- 消费明细 ---');
+    lines.push('');
+
+    bills.forEach((bill, idx) => {
+      lines.push(`${idx + 1}. 账单编号: ${bill.id}`);
+      lines.push(`   时间: ${format(new Date(bill.startTime), 'yyyy-MM-dd HH:mm')} ~ ${format(new Date(bill.endTime), 'HH:mm')}`);
+      lines.push(`   时长: ${bill.totalDurationMinutes}分钟  总额: ¥${bill.totalAmount.toFixed(2)}`);
+      if (bill.quotaDeductedMinutes > 0) {
+        lines.push(`   额度抵扣: ${bill.quotaDeductedMinutes}分钟 -¥${bill.quotaDeductedAmount.toFixed(2)}`);
+      }
+      if (bill.timeCardUsed) {
+        lines.push(`   次卡抵扣: ${bill.timeCardUsed.minutesUsed}分钟 -¥${bill.timeCardUsed.amountDeducted.toFixed(2)}`);
+      }
+      lines.push(`   实付: ¥${bill.selfPaidAmount.toFixed(2)}  方式: ${this.getPaymentMethodName(bill.paymentMethod)}  状态: ${this.getStatusName(bill.status)}`);
+      lines.push('');
+    });
+
+    lines.push('====================================');
+    lines.push(`导出时间: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`);
+    lines.push('====================================');
+
+    return lines.join('\n');
+  }
+
   private getPaymentMethodName(method: string): string {
     const map: Record<string, string> = {
       'quota': '月度额度',
@@ -181,7 +262,7 @@ export class TransactionService {
   }
 
   getDailyConsumptionTrend(memberId: string, days: number = 7) {
-    const data: { date: string; amount: number; duration: number }[] = [];
+    const data: { date: string; fullDate: string; amount: number; duration: number; billIds: string[] }[] = [];
     const end = new Date();
 
     for (let i = days - 1; i >= 0; i--) {
@@ -199,8 +280,10 @@ export class TransactionService {
 
       data.push({
         date: format(date, 'MM-dd'),
+        fullDate: format(date, 'yyyy-MM-dd'),
         amount: Math.round(dayBills.reduce((sum, b) => sum + b.totalAmount, 0) * 100) / 100,
-        duration: dayBills.reduce((sum, b) => sum + b.totalDurationMinutes, 0)
+        duration: dayBills.reduce((sum, b) => sum + b.totalDurationMinutes, 0),
+        billIds: dayBills.map(b => b.id)
       });
     }
 
