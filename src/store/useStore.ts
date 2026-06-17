@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Member, BillingRecord, TimeSlot, BillingCalculationResult } from '../types';
+import type { Member, BillingRecord, TimeSlot, TimeCard, BillingCalculationResult } from '../types';
 import { mockMember, mockBillingRecords, defaultTimeSlots } from '../data/mockData';
 import { transactionService } from '../services/transaction.service';
 import { quotaService } from '../services/quota.service';
@@ -107,6 +107,38 @@ export const useStore = create<AppState>((set, get) => ({
       if (records.length > 0) {
         set({ billingRecords: records });
       }
+
+      try {
+        const memberData = localStorage.getItem('memberState');
+        if (memberData) {
+          const parsed = JSON.parse(memberData);
+          const restoredMember: Member = {
+            ...parsed,
+            registerDate: new Date(parsed.registerDate),
+            quota: {
+              ...parsed.quota,
+              resetDate: new Date(parsed.quota.resetDate),
+              lastResetDate: new Date(parsed.quota.lastResetDate),
+            },
+            timeCards: parsed.timeCards.map((tc: TimeCard) => ({
+              ...tc,
+              expireDate: new Date(tc.expireDate),
+            })),
+          };
+          set({ member: restoredMember });
+        }
+      } catch (e) {
+        console.error('加载会员状态失败', e);
+      }
     }
   }
 }));
+
+useStore.subscribe((state) => {
+  try {
+    const { member } = state;
+    localStorage.setItem('memberState', JSON.stringify(member));
+  } catch (e) {
+    console.error('保存会员状态失败', e);
+  }
+});

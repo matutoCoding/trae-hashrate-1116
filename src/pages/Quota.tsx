@@ -104,6 +104,16 @@ export default function Quota() {
     setSelectedDay(data);
   };
 
+  const getHistoricalRemaining = (day: TrendDay | null): number => {
+    if (!day) return quota.remainingMinutes;
+    const dayEnd = new Date(day.fullDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    const cumulativeUsed = transactionService.getCumulativeQuotaUsedUpTo(member.id, dayEnd);
+    const quotaAfterDay = Math.max(0, quota.monthlyFreeMinutes - cumulativeUsed);
+    const isToday = day.fullDate === format(new Date(), 'yyyy-MM-dd');
+    return isToday ? quota.remainingMinutes : quotaAfterDay;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <div className="max-w-lg mx-auto px-4 py-6">
@@ -290,8 +300,8 @@ export default function Quota() {
                       <div className="text-xs text-gray-500">消费金额</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-lg font-bold text-accent-600">{quota.remainingMinutes}</div>
-                      <div className="text-xs text-gray-500">剩余额度(分钟)</div>
+                      <div className="text-lg font-bold text-accent-600">{getHistoricalRemaining(selectedDay)}</div>
+                      <div className="text-xs text-gray-500">当日剩余额度(分钟)</div>
                     </div>
                   </div>
 

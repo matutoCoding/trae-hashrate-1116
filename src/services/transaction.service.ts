@@ -290,6 +290,15 @@ export class TransactionService {
     return data;
   }
 
+  getCumulativeQuotaUsedUpTo(memberId: string, upToDate: Date): number {
+    return this.bills
+      .filter(bill => 
+        bill.memberId === memberId && 
+        new Date(bill.endTime) <= upToDate
+      )
+      .reduce((sum, bill) => sum + bill.quotaDeductedMinutes, 0);
+  }
+
   private saveToStorage(): void {
     try {
       localStorage.setItem('billingRecords', JSON.stringify(this.bills));
